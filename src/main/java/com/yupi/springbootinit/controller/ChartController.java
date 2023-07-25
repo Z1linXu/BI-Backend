@@ -13,16 +13,12 @@ import com.yupi.springbootinit.constant.FileConstant;
 import com.yupi.springbootinit.constant.UserConstant;
 import com.yupi.springbootinit.exception.BusinessException;
 import com.yupi.springbootinit.exception.ThrowUtils;
-import com.yupi.springbootinit.model.dto.chart.ChartAddRequest;
-import com.yupi.springbootinit.model.dto.chart.ChartEditRequest;
-import com.yupi.springbootinit.model.dto.chart.ChartQueryRequest;
-import com.yupi.springbootinit.model.dto.chart.ChartUpdateRequest;
-import com.yupi.springbootinit.model.dto.file.UploadFileRequest;
+import com.yupi.springbootinit.model.dto.chart.*;
 import com.yupi.springbootinit.model.entity.Chart;
 import com.yupi.springbootinit.model.entity.User;
-import com.yupi.springbootinit.model.enums.FileUploadBizEnum;
 import com.yupi.springbootinit.service.ChartService;
 import com.yupi.springbootinit.service.UserService;
+import com.yupi.springbootinit.utils.ExcelUtils;
 import com.yupi.springbootinit.utils.SqlUtils;
 import lombok.extern.slf4j.Slf4j;
 import org.apache.commons.lang3.ObjectUtils;
@@ -222,44 +218,51 @@ public class ChartController {
      * AI Analytics
      *
      * @param multipartFile
-     * @param uploadFileRequest
+     * @param genChartByAiRequest
      * @param request
      * @return
      */
     @PostMapping("/gen")
     public BaseResponse<String> genChartByAi(@RequestPart("file") MultipartFile multipartFile,
-                                           UploadFileRequest uploadFileRequest, HttpServletRequest request) {
-        String biz = uploadFileRequest.getBiz();
-        FileUploadBizEnum fileUploadBizEnum = FileUploadBizEnum.getEnumByValue(biz);
-        if (fileUploadBizEnum == null) {
-            throw new BusinessException(ErrorCode.PARAMS_ERROR);
-        }
-        validFile(multipartFile, fileUploadBizEnum);
-        User loginUser = userService.getLoginUser(request);
-        // 文件目录：根据业务、用户来划分
-        String uuid = RandomStringUtils.randomAlphanumeric(8);
-        String filename = uuid + "-" + multipartFile.getOriginalFilename();
-        String filepath = String.format("/%s/%s/%s", fileUploadBizEnum.getValue(), loginUser.getId(), filename);
-        File file = null;
-        try {
-            // 上传文件
-            file = File.createTempFile(filepath, null);
-            multipartFile.transferTo(file);
-            cosManager.putObject(filepath, file);
-            // 返回可访问地址
-            return ResultUtils.success(FileConstant.COS_HOST + filepath);
-        } catch (Exception e) {
-            log.error("file upload error, filepath = " + filepath, e);
-            throw new BusinessException(ErrorCode.SYSTEM_ERROR, "上传失败");
-        } finally {
-            if (file != null) {
-                // 删除临时文件
-                boolean delete = file.delete();
-                if (!delete) {
-                    log.error("file delete error, filepath = {}", filepath);
-                }
-            }
-        }
+                                             GenChartByAiRequest genChartByAiRequest, HttpServletRequest request) {
+        String name = genChartByAiRequest.getName();
+        String goal = genChartByAiRequest.getGoal();
+        String chartType = genChartByAiRequest.getChartType();
+        //Validation goal
+        ThrowUtils.throwIf(StringUtils.isBlank(goal), ErrorCode.PARAMS_ERROR, "Goal is Empty");
+        //Validation name
+        ThrowUtils.throwIf(StringUtils.isNotBlank(name) && name.length() >100,
+                ErrorCode.PARAMS_ERROR, "Name is too long");
+
+        String result= ExcelUtils.excelToCsv(multipartFile);
+        return ResultUtils.success(result);
+
+//            // Read the user-uploaded Excel file and perform processing
+//            User loginUser = userService.getLoginUser(request);
+//
+//            // File directory: Organize files based on business or users
+//            String uuid = RandomStringUtils.randomAlphanumeric(8);
+//            String filename = uuid + "-" + multipartFile.getOriginalFilename();
+//            File file = null;
+//            try {
+//                // Perform file processing here...
+//
+//                // Return the accessible file address if needed
+//                return ResultUtils.success("File processing successful");
+//            } catch (Exception e) {
+//                // Log the error and handle the exception
+//                // log.error("File upload error, filepath = " + filepath, e);
+//                throw new BusinessException(ErrorCode.SYSTEM_ERROR, "Upload failed");
+//            } finally {
+//                if (file != null) {
+//                    // Delete the temporary file after processing
+//                    boolean delete = file.delete();
+//                    if (!delete) {
+//                        // log.error("File delete error, filepath = {}", filepath);
+//                    }
+//                }
+//            }
+
     }
 
     /**
